@@ -416,42 +416,59 @@ function formatMarkdown(text) {
 }
 
 function extractPaperTitle(textStr, arxivId) {
-  if (!textStr) return `arXiv:${arxivId}`;
+  if (!textStr || !arxivId) return `arXiv:${arxivId}`;
 
-  // 1. Look for main Markdown title e.g. # 📄 Detailed Paper Summary: *Title* or # Title
-  const h1Match = textStr.match(/^#+\s*(?:📄\s*)?(?:Detailed\s+Paper\s+Summary:\s*)?\*?([^\n\*#]+)\*?/m);
-  if (h1Match && h1Match[1]) {
-    let clean = h1Match[1].replace(/^Detailed\s+Paper\s+Summary:\s*/i, '').replace(/[\*#\[\]]/g, '').trim();
-    if (clean.length > 5 && !clean.toLowerCase().includes("arxiv id")) return clean;
+  function isGenericHeader(s) {
+    if (!s) return true;
+    const l = s.toLowerCase();
+    return l.includes("arxiv radar") || 
+           l.includes("radar digest") || 
+           l.includes("paper summary") || 
+           l.includes("arxiv id") || 
+           l.includes("detailed summary") || 
+           l.includes("found recent papers") || 
+           l.includes("search results");
   }
 
-  // 2. Look for bold title line e.g. **1. Do Multimodal LLMs See Before They Read?**
-  const boldMatches = [...textStr.matchAll(/(?:\d+\.\s+)?\*\*([^\*\n]{8,120})\*\*/g)];
-  for (const bm of boldMatches) {
-    if (bm && bm[1]) {
-      let clean = bm[1].replace(/^[\d\.\s]+/, '').replace(/[\*#\[\]]/g, '').trim();
-      if (clean.length > 5 && !clean.toLowerCase().includes("arxiv id") && !clean.toLowerCase().includes("authors")) {
-        return clean;
+  // 1. Look for **Title:** <Title> or **1. Paper Name**
+  const titleKeyMatch = textStr.match(/(?:\*\*Title:?\*\*|\*\*Paper:?\*\*|\d+\.\s+\*\*)\s*\*?([^\*\n\[\]]{8,150})\*?/i);
+  if (titleKeyMatch && titleKeyMatch[1]) {
+    let clean = titleKeyMatch[1].replace(/[\*#\[\]]/g, '').trim();
+    if (!isGenericHeader(clean) && clean.length > 5) return clean;
+  }
+
+  // 2. Look for lines containing arxivId and extract title
+  const lines = textStr.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line && line.includes(arxivId)) {
+      for (let offset = -2; offset <= 1; offset++) {
+        const targetLine = lines[i + offset];
+        if (targetLine) {
+          const match = targetLine.match(/(?:#+|\d+\.|\*\*)\s*\*?([^\*\n\[\]#]{10,150})\*?/);
+          if (match && match[1]) {
+            let clean = match[1].replace(/[\*#\[\]]/g, '').replace(/arXiv:?\s*\d{4}\.\d{4,5}(v\d+)?/gi, '').trim();
+            if (!isGenericHeader(clean) && clean.length > 5 && !clean.toLowerCase().startsWith('http')) {
+              return clean;
+            }
+          }
+        }
       }
     }
   }
 
-  // 3. Fallback search
-  const lines = textStr.split('\n');
-  for (const line of lines) {
-    if (line && line.includes(arxivId)) {
-      const cleanLine = line.replace(/[\*\[\]#]/g, '')
-                            .replace(/arXiv:?\s*\d{4}\.\d{4,5}(v\d+)?/gi, '')
-                            .replace(/^(arXiv\s*)?ID:?/gi, '')
-                            .trim();
-      if (cleanLine.length > 8 && !cleanLine.toLowerCase().startsWith('http')) {
-        return cleanLine;
-      }
+  // 3. Look for level 2 or 3 heading (## Paper Title) that isn't generic
+  const h2Matches = [...textStr.matchAll(/^#{2,3}\s+\*?([^\*\n#\[\]]{10,150})\*?/gm)];
+  for (const hm of h2Matches) {
+    if (hm && hm[1]) {
+      let clean = hm[1].replace(/[\*#\[\]]/g, '').trim();
+      if (!isGenericHeader(clean) && clean.length > 5) return clean;
     }
   }
 
   return `arXiv:${arxivId}`;
 }
+
 
 function attachPaperActionsAtBottom(b, textStr) {
   if (!b || !textStr || typeof textStr !== "string") return;
