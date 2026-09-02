@@ -574,32 +574,65 @@ function createPaperActionsBar(arxivId, title, authors, githubUrl) {
 }
 
 function enrichPaperActions(container, textStr, a2uiData) {
-  if (!textStr) return;
+  if (!container) return;
 
-  // Extract all arXiv IDs present in text or cards
-  const idMatches = [...textStr.matchAll(/(\d{4}\.\d{4,5})(v\d+)?/g)].map(m => m[1]);
-  const uniqueIds = [...new Set(idMatches)];
+  const textDiv = container.querySelector(".text-body");
 
-  // Extract GitHub URLs if any
-  const ghMatches = [...textStr.matchAll(/https?:\/\/github\.com\/[^\s\)`"'\>]+/gi)].map(m => m[0]);
-  const firstGh = ghMatches[0] || null;
+  // Extract all unique arXiv IDs
+  const arxivRegex = /(\d{4}\.\d{4,5})(v\d+)?/g;
+  const matches = [...textStr.matchAll(arxivRegex)];
+  const uniqueIds = [...new Set(matches.map(m => m[1]))];
 
-  // Extract paper title if present in text
-  let title = "";
-  const titleMatch = textStr.match(/(?:#|\*\*|Title:?)\s*\*?([^\*\n]{10,120})\*?/i);
-  if (titleMatch) title = titleMatch[1].trim();
+  if (!uniqueIds.length) return;
 
-  // Attach action bars for each unique arXiv ID found
-  if (uniqueIds.length > 0) {
-    uniqueIds.forEach(arxivId => {
-      if (!container.querySelector(`[data-arxiv-id="${arxivId}"]`)) {
-        const bar = createPaperActionsBar(arxivId, title, "", firstGh);
-        bar.setAttribute("data-arxiv-id", arxivId);
-        container.appendChild(bar);
+  uniqueIds.forEach(arxivId => {
+    // Prevent duplicate action bars for the same paper ID
+    if (container.querySelector(`[data-arxiv-id="${arxivId}"]`)) return;
+
+    // Find the title for this paper near the arXiv ID
+    const paperTitleMatch = new RegExp(`(?:\\#|\\*\\*|\\d+\\.\\s+\\*\\*)([^\\*\\n\\]]{8,120})[^\n]*?${arxivId}`, 'i').exec(textStr)
+      || new RegExp(`${arxivId}[^\\n]*?\\n+[^\\n]*?(?:Title:?|\\*\\*)([^\\*\\n]{8,120})`, 'i').exec(textStr);
+    
+    let title = paperTitleMatch ? paperTitleMatch[1].replace(/[\*\[\]#]/g, '').trim() : "";
+
+    // Extract GitHub link near this paper
+    const ghMatch = textStr.match(new RegExp(`(?:${arxivId}|${title.slice(0, 15)})[\\s\\S]{0,400}?(https?:\\/\\/github\\.com\\/[^\\s\\)\\`"'>]+)`, 'i'));
+    const githubUrl = ghMatch ? ghMatch[1] : null;
+
+    const bar = createPaperActionsBar(arxivId, title, "", githubUrl);
+    bar.setAttribute("data-arxiv-id", arxivId);
+
+    // Locate the exact text node / block element inside textDiv for this paper
+    let placed = false;
+    if (textDiv) {
+      const walker = document.createTreeWalker(textDiv, NodeFilter.SHOW_TEXT);
+      let currentNode;
+      while ((currentNode = walker.nextNode())) {
+        if (currentNode.nodeValue && currentNode.nodeValue.includes(arxivId)) {
+          let parent = currentNode.parentElement;
+          while (parent && parent.parentElement !== textDiv && parent !== textDiv) {
+            parent = parent.parentElement;
+          }
+          if (parent && parent !== textDiv) {
+            if (parent.nextSibling) {
+              textDiv.insertBefore(bar, parent.nextSibling);
+            } else {
+              textDiv.appendChild(bar);
+            }
+            placed = true;
+            break;
+          }
+        }
       }
-    });
-  }
+    }
+
+    // Fallback: If no inline parent found in textDiv, append to container
+    if (!placed) {
+      container.appendChild(bar);
+    }
+  });
 }
+
 
 
 form.addEventListener("submit", async (ev) => {
