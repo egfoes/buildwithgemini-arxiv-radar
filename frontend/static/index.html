@@ -318,6 +318,14 @@
   .btn-icon {
     font-size: 1.05rem !important;
   }
+  /* Paper item block container */
+  .paper-item-block {
+    margin: 0.75rem 0 1rem;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
   .material-symbols-outlined { font-family: 'Material Symbols Outlined'; font-size: 1.25rem; line-height: 1; vertical-align: middle; color: var(--accent); }
 </style>
 </head>
@@ -366,47 +374,66 @@ function removeWelcome() {
 
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
-function createMsgRow(who) {
-  removeWelcome();
-  const row = el("div", "msg-row " + who);
-  
-  const avatar = el("div", "avatar");
-  const icon = el("span", "material-symbols-outlined", who === "user" ? "person" : "radar");
-  avatar.appendChild(icon);
-
-  const col = el("div", "msg-content");
-  const senderMeta = el("div", "sender-meta", who === "user" ? "You" : "ArXiv Radar");
-  const b = el("div", "bubble");
-
-  col.appendChild(senderMeta);
-  col.appendChild(b);
-
-  if (who === "user") {
-    row.appendChild(col);
-    row.appendChild(avatar);
-  } else {
-    row.appendChild(avatar);
-    row.appendChild(col);
-  }
-
-  log.appendChild(row);
-  log.scrollTop = log.scrollHeight;
-  return b;
-}
+window.copyBibTeX = function(btn, arxivId, title) {
+  const cleanId = arxivId.replace(/[^a-zA-Z0-9]/g, '_');
+  const cleanTitle = (title || 'Research Paper').replace(/\n/g, ' ').replace(/"/g, '\\"');
+  const bibtex = `@article{arxiv_${cleanId},\n  title={${cleanTitle}},\n  journal={arXiv preprint arXiv:${arxivId}},\n  year={2026}\n}`;
+  navigator.clipboard.writeText(bibtex).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = `<span class="material-symbols-outlined btn-icon">check</span> Copied!`;
+    btn.classList.add("copied");
+    setTimeout(() => {
+      btn.innerHTML = orig;
+      btn.classList.remove("copied");
+    }, 2000);
+  });
+};
 
 function formatMarkdown(text) {
   if (!text) return "";
-  let html = text
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/### (.*?)(?:\n|$)/g, "<h3>$1</h3>")
-    .replace(/## (.*?)(?:\n|$)/g, "<h2>$1</h2>")
-    .replace(/# (.*?)(?:\n|$)/g, "<h1>$1</h1>")
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/`(.*?)`/g, "<code>$1</code>")
-    .replace(/\n/g, "<br>");
-  return html;
+
+  function parseBlock(blockText) {
+    let html = blockText
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/### (.*?)(?:\n|$)/g, "<h3>$1</h3>")
+      .replace(/## (.*?)(?:\n|$)/g, "<h2>$1</h2>")
+      .replace(/# (.*?)(?:\n|$)/g, "<h1>$1</h1>")
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>")
+      .replace(/`(.*?)`/g, "<code>$1</code>")
+      .replace(/\n/g, "<br>");
+
+    const arxivMatch = blockText.match(/(\d{4}\.\d{4,5})(v\d+)?/);
+    if (arxivMatch) {
+      const arxivId = arxivMatch[1];
+      const titleMatch = blockText.match(/(?:#|\*\*|Title:?|\d+\.\s+\*\*)\s*\*?([^\*\n\]]{8,120})\*?/i);
+      const title = titleMatch ? titleMatch[1].replace(/[\*\[\]#]/g, '').trim() : "Research Paper";
+      const ghMatch = blockText.match(/https?:\/\/github\.com\/[^\s\)`"'\>]+/i);
+      const ghUrl = ghMatch ? ghMatch[0] : null;
+
+      const barHtml = `
+        <div class="paper-actions-bar" data-arxiv-id="${arxivId}">
+          <a class="action-btn pdf-btn" href="https://arxiv.org/pdf/${arxivId}.pdf" target="_blank" rel="noopener noreferrer">
+            <span class="material-symbols-outlined btn-icon">picture_as_pdf</span> PDF
+          </a>
+          <button class="action-btn bib-btn" type="button" onclick="copyBibTeX(this, '${arxivId}', '${title.replace(/'/g, "\\'")}')">
+            <span class="material-symbols-outlined btn-icon">content_copy</span> BibTeX
+          </button>
+          ${ghUrl ? `<a class="action-btn gh-btn" href="${ghUrl}" target="_blank" rel="noopener noreferrer">
+            <span class="material-symbols-outlined btn-icon">code</span> GitHub
+          </a>` : ''}
+        </div>
+      `;
+      return `<div class="paper-item-block">${html}${barHtml}</div>`;
+    }
+
+    return `<div class="text-block">${html}</div>`;
+  }
+
+  const rawBlocks = text.split(/\n\n+/);
+  return rawBlocks.map(b => parseBlock(b)).join("");
 }
+
 
 /* ----------------------------------------------------------------------------
  * A2UI mini-renderer (v0.8 Basic Catalog subset).
@@ -521,115 +548,9 @@ function renderReply(b, parts) {
   }
   if (!b.childNodes.length) b.textContent = "(no response)";
 
-  // Enrich paper responses with interactive action buttons (PDF, BibTeX, GitHub)
-  enrichPaperActions(b, textStr, a2ui);
-
   log.scrollTop = log.scrollHeight;
 }
 
-function createPaperActionsBar(arxivId, title, authors, githubUrl) {
-  const bar = el("div", "paper-actions-bar");
-
-  // Open PDF Button
-  const pdfBtn = el("a", "action-btn pdf-btn");
-  pdfBtn.href = `https://arxiv.org/pdf/${arxivId}.pdf`;
-  pdfBtn.target = "_blank";
-  pdfBtn.rel = "noopener noreferrer";
-  pdfBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">picture_as_pdf</span> PDF`;
-
-  // Copy BibTeX Button
-  const bibBtn = el("button", "action-btn bib-btn");
-  bibBtn.type = "button";
-  bibBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">content_copy</span> BibTeX`;
-  bibBtn.onclick = () => {
-    const cleanId = arxivId.replace(/[^a-zA-Z0-9]/g, '_');
-    const cleanTitle = (title || 'Research Paper').replace(/\n/g, ' ').replace(/"/g, '\\"');
-    const cleanAuthors = (authors || 'arXiv Authors').replace(/\n/g, ' ');
-    const bibtex = `@article{arxiv_${cleanId},\n  title={${cleanTitle}},\n  author={${cleanAuthors}},\n  journal={arXiv preprint arXiv:${arxivId}},\n  year={2026}\n}`;
-    navigator.clipboard.writeText(bibtex).then(() => {
-      const orig = bibBtn.innerHTML;
-      bibBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">check</span> Copied!`;
-      bibBtn.classList.add("copied");
-      setTimeout(() => {
-        bibBtn.innerHTML = orig;
-        bibBtn.classList.remove("copied");
-      }, 2000);
-    });
-  };
-
-  bar.appendChild(pdfBtn);
-  bar.appendChild(bibBtn);
-
-  // GitHub Repo Button (if available)
-  if (githubUrl) {
-    const ghBtn = el("a", "action-btn gh-btn");
-    ghBtn.href = githubUrl;
-    ghBtn.target = "_blank";
-    ghBtn.rel = "noopener noreferrer";
-    ghBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">code</span> GitHub`;
-    bar.appendChild(ghBtn);
-  }
-
-  return bar;
-}
-
-function enrichPaperActions(container, textStr, a2uiData) {
-  if (!container || !textStr) return;
-
-  try {
-    const textDiv = container.querySelector(".text-body");
-
-    // Extract all unique arXiv IDs
-    const arxivRegex = /(\d{4}\.\d{4,5})(v\d+)?/g;
-    const matches = [...textStr.matchAll(arxivRegex)];
-    const uniqueIds = [...new Set(matches.map(m => m[1]))];
-
-    if (!uniqueIds.length) return;
-
-    // Extract GitHub links if any
-    const ghMatches = [...textStr.matchAll(/https?:\/\/github\.com\/[^\s\)`"'\>]+/gi)].map(m => m[0]);
-    const firstGh = ghMatches[0] || null;
-
-    uniqueIds.forEach(arxivId => {
-      // Prevent duplicate action bars for the same paper ID
-      if (container.querySelector(`[data-arxiv-id="${arxivId}"]`)) return;
-
-      const bar = createPaperActionsBar(arxivId, "Research Paper", "", firstGh);
-      bar.setAttribute("data-arxiv-id", arxivId);
-
-      // Locate the exact text node / block element inside textDiv for this paper
-      let placed = false;
-      if (textDiv) {
-        const walker = document.createTreeWalker(textDiv, NodeFilter.SHOW_TEXT);
-        let currentNode;
-        while ((currentNode = walker.nextNode())) {
-          if (currentNode.nodeValue && currentNode.nodeValue.includes(arxivId)) {
-            let parent = currentNode.parentElement;
-            while (parent && parent.parentElement !== textDiv && parent !== textDiv) {
-              parent = parent.parentElement;
-            }
-            if (parent && parent !== textDiv) {
-              if (parent.nextSibling) {
-                textDiv.insertBefore(bar, parent.nextSibling);
-              } else {
-                textDiv.appendChild(bar);
-              }
-              placed = true;
-              break;
-            }
-          }
-        }
-      }
-
-      // Fallback: If no inline parent found in textDiv, append to container
-      if (!placed) {
-        container.appendChild(bar);
-      }
-    });
-  } catch (err) {
-    console.error("enrichPaperActions error:", err);
-  }
-}
 
 
 
