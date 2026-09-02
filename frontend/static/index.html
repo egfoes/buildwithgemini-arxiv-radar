@@ -623,7 +623,35 @@ function renderReply(b, parts) {
 
 
 
+function createMsgRow(role) {
+  removeWelcome();
+  const row = el("div", "msg-row " + role);
+  const avatar = el("div", "avatar");
+  const icon = el("span", "material-symbols-outlined", role === "user" ? "person" : "radar");
+  avatar.appendChild(icon);
+
+  const msgContent = el("div", "msg-content");
+  const meta = el("span", "sender-meta", role === "user" ? "You" : "ArXiv Radar Assistant");
+  const bubble = el("div", "bubble " + role);
+
+  msgContent.appendChild(meta);
+  msgContent.appendChild(bubble);
+
+  if (role === "user") {
+    row.appendChild(msgContent);
+    row.appendChild(avatar);
+  } else {
+    row.appendChild(avatar);
+    row.appendChild(msgContent);
+  }
+
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+  return bubble;
+}
+
 form.addEventListener("submit", async (ev) => {
+
   ev.preventDefault();
   const text = input.value.trim();
   if (!text) return;
