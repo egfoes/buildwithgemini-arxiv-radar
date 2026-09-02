@@ -118,7 +118,10 @@ SYSTEM_INSTRUCTION = schema_manager.generate_system_prompt(
 
 async def generate_memories_callback(callback_context: CallbackContext):
     """WRITE callback: sends session events to Vertex AI Memory Bank after each turn."""
-    await callback_context.add_session_to_memory()
+    try:
+        await callback_context.add_session_to_memory()
+    except ValueError:
+        pass
     return None
 
 
