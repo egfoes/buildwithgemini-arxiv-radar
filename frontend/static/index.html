@@ -430,44 +430,36 @@ function extractPaperTitle(textStr, arxivId) {
            l.includes("search results");
   }
 
-  // 1. Look for **Title:** <Title> or **1. Paper Name**
-  const titleKeyMatch = textStr.match(/(?:\*\*Title:?\*\*|\*\*Paper:?\*\*|\d+\.\s+\*\*)\s*\*?([^\*\n\[\]]{8,150})\*?/i);
-  if (titleKeyMatch && titleKeyMatch[1]) {
-    let clean = titleKeyMatch[1].replace(/[\*#\[\]]/g, '').trim();
-    if (!isGenericHeader(clean) && clean.length > 5) return clean;
+  const lines = textStr.split('\n');
+  let arxivLineIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] && lines[i].includes(arxivId)) {
+      arxivLineIdx = i;
+      break;
+    }
   }
 
-  // 2. Look for lines containing arxivId and extract title
-  const lines = textStr.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line && line.includes(arxivId)) {
-      for (let offset = -2; offset <= 1; offset++) {
-        const targetLine = lines[i + offset];
-        if (targetLine) {
-          const match = targetLine.match(/(?:#+|\d+\.|\*\*)\s*\*?([^\*\n\[\]#]{10,150})\*?/);
-          if (match && match[1]) {
-            let clean = match[1].replace(/[\*#\[\]]/g, '').replace(/arXiv:?\s*\d{4}\.\d{4,5}(v\d+)?/gi, '').trim();
-            if (!isGenericHeader(clean) && clean.length > 5 && !clean.toLowerCase().startsWith('http')) {
-              return clean;
-            }
+  if (arxivLineIdx !== -1) {
+    for (let offset = -3; offset <= 2; offset++) {
+      const idx = arxivLineIdx + offset;
+      if (idx >= 0 && idx < lines.length) {
+        const line = lines[idx];
+        if (!line) continue;
+
+        const titleMatch = line.match(/(?:\d+\.\s+|\*\*Title:?\*\*|\*\*Paper:?\*\*|#{1,4}\s+|\*\*\s*)([^\*\n\[\]#]{8,140})/i);
+        if (titleMatch && titleMatch[1]) {
+          let clean = titleMatch[1].replace(/^[\d\.\s]+/, '').replace(/[\*#\[\]]/g, '').replace(/arXiv:?\s*\d{4}\.\d{4,5}(v\d+)?/gi, '').trim();
+          if (!isGenericHeader(clean) && clean.length > 5 && !clean.toLowerCase().startsWith('http')) {
+            return clean;
           }
         }
       }
     }
   }
 
-  // 3. Look for level 2 or 3 heading (## Paper Title) that isn't generic
-  const h2Matches = [...textStr.matchAll(/^#{2,3}\s+\*?([^\*\n#\[\]]{10,150})\*?/gm)];
-  for (const hm of h2Matches) {
-    if (hm && hm[1]) {
-      let clean = hm[1].replace(/[\*#\[\]]/g, '').trim();
-      if (!isGenericHeader(clean) && clean.length > 5) return clean;
-    }
-  }
-
   return `arXiv:${arxivId}`;
 }
+
 
 
 function attachPaperActionsAtBottom(b, textStr) {
