@@ -263,6 +263,61 @@
   .a2text.a2-caption { font-size: 0.85rem; color: var(--text-muted); }
   .a2divider { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0; width: 100%; }
   .a2img { max-width: 100%; border-radius: 8px; display: block; }
+  /* Action buttons bar for PDF, BibTeX, and GitHub */
+  .paper-actions-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: #ffffff;
+    color: var(--text-primary);
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .action-btn:hover {
+    background: #f1f5f9;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .action-btn.pdf-btn {
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+  }
+  .action-btn.pdf-btn:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+  }
+  .action-btn.gh-btn {
+    background: #f8fafc;
+    color: #0f172a;
+    border-color: #cbd5e1;
+  }
+  .action-btn.gh-btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+  }
+  .action-btn.bib-btn.copied {
+    background: #ecfdf5;
+    color: #059669;
+    border-color: #a7f3d0;
+  }
+  .btn-icon {
+    font-size: 1.05rem !important;
+  }
   .material-symbols-outlined { font-family: 'Material Symbols Outlined'; font-size: 1.25rem; line-height: 1; vertical-align: middle; color: var(--accent); }
 </style>
 </head>
@@ -465,8 +520,87 @@ function renderReply(b, parts) {
     if (!renderSurface(a2ui, b)) b.appendChild(el("div", null, flattenText(a2ui) || "(no card content)"));
   }
   if (!b.childNodes.length) b.textContent = "(no response)";
+
+  // Enrich paper responses with interactive action buttons (PDF, BibTeX, GitHub)
+  enrichPaperActions(b, textStr, a2ui);
+
   log.scrollTop = log.scrollHeight;
 }
+
+function createPaperActionsBar(arxivId, title, authors, githubUrl) {
+  const bar = el("div", "paper-actions-bar");
+
+  // Open PDF Button
+  const pdfBtn = el("a", "action-btn pdf-btn");
+  pdfBtn.href = `https://arxiv.org/pdf/${arxivId}.pdf`;
+  pdfBtn.target = "_blank";
+  pdfBtn.rel = "noopener noreferrer";
+  pdfBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">picture_as_pdf</span> PDF`;
+
+  // Copy BibTeX Button
+  const bibBtn = el("button", "action-btn bib-btn");
+  bibBtn.type = "button";
+  bibBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">content_copy</span> BibTeX`;
+  bibBtn.onclick = () => {
+    const cleanId = arxivId.replace(/[^a-zA-Z0-9]/g, '_');
+    const cleanTitle = (title || 'Research Paper').replace(/\n/g, ' ').replace(/"/g, '\\"');
+    const cleanAuthors = (authors || 'arXiv Authors').replace(/\n/g, ' ');
+    const bibtex = `@article{arxiv_${cleanId},\n  title={${cleanTitle}},\n  author={${cleanAuthors}},\n  journal={arXiv preprint arXiv:${arxivId}},\n  year={2026}\n}`;
+    navigator.clipboard.writeText(bibtex).then(() => {
+      const orig = bibBtn.innerHTML;
+      bibBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">check</span> Copied!`;
+      bibBtn.classList.add("copied");
+      setTimeout(() => {
+        bibBtn.innerHTML = orig;
+        bibBtn.classList.remove("copied");
+      }, 2000);
+    });
+  };
+
+  bar.appendChild(pdfBtn);
+  bar.appendChild(bibBtn);
+
+  // GitHub Repo Button (if available)
+  if (githubUrl) {
+    const ghBtn = el("a", "action-btn gh-btn");
+    ghBtn.href = githubUrl;
+    ghBtn.target = "_blank";
+    ghBtn.rel = "noopener noreferrer";
+    ghBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">code</span> GitHub`;
+    bar.appendChild(ghBtn);
+  }
+
+  return bar;
+}
+
+function enrichPaperActions(container, textStr, a2uiData) {
+  if (!textStr) return;
+
+  // Extract all arXiv IDs present in text or cards
+  const idMatches = [...textStr.matchAll(/(\d{4}\.\d{4,5})(v\d+)?/g)].map(m => m[1]);
+  const uniqueIds = [...new Set(idMatches)];
+
+  // Extract GitHub URLs if any
+  const ghMatches = [...textStr.matchAll(/https?:\/\/github\.com\/[^\s\)`"'\>]+/gi)].map(m => m[0]);
+  const firstGh = ghMatches[0] || null;
+
+  // Extract paper title if present in text
+  let title = "";
+  const titleMatch = textStr.match(/(?:#|\*\*|Title:?)\s*\*?([^\*\n]{10,120})\*?/i);
+  if (titleMatch) title = titleMatch[1].trim();
+
+  // Attach action bars for each unique arXiv ID found
+  if (uniqueIds.length > 0) {
+    uniqueIds.forEach(arxivId => {
+      if (!container.querySelector(`[data-arxiv-id="${arxivId}"]`)) {
+        const bar = createPaperActionsBar(arxivId, title, "", firstGh);
+        bar.setAttribute("data-arxiv-id", arxivId);
+        container.appendChild(bar);
+      }
+    });
+  }
+}
+
 
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
