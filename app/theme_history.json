@@ -1,0 +1,4 @@
+{
+  "last_updated": "2026-09-02",
+  "comparative_summary": "Compared to historical baselines in Firestore (which focused heavily on manual circuit identification and prompt-level steering), research this week highlights post-training preference optimization dynamics (DPO/CPO implicit sycophancy transfer) and architectural isolation (System-2 Visual Arbitration). Benchmarks have evolved from single-prompt tests to disentangled multi-trigger probes (identity vs. opinion) and automated alignment loops."
+}

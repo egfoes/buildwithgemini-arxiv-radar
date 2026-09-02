@@ -1,0 +1,12 @@
+[
+  {
+    "name": "EvalBench-Sycophancy",
+    "description": "Building an evaluation framework for testing user-pressure answer flipping and sycophancy in LLMs.",
+    "key_topics": [
+      "sycophancy",
+      "evaluations",
+      "RLHF",
+      "user pressure"
+    ]
+  }
+]
