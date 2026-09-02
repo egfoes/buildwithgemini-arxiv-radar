@@ -21,6 +21,11 @@ dependencies = [
 ]
 requires-python = ">=3.11,<3.14"
 
+[tool.pytest.ini_options]
+env = [
+    "GOOGLE_GENAI_USE_VERTEXAI=true",
+]
+
 
 [dependency-groups]
 dev = [
