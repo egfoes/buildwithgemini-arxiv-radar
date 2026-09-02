@@ -416,80 +416,86 @@ function formatMarkdown(text) {
 }
 
 function attachPaperActionsAtBottom(b, textStr) {
-  if (!b || !textStr) return;
+  if (!b || !textStr || typeof textStr !== "string") return;
 
-  const arxivRegex = /(\d{4}\.\d{4,5})(v\d+)?/g;
-  const matches = [...textStr.matchAll(arxivRegex)];
-  const uniqueIds = [...new Set(matches.map(m => m[1]))];
+  try {
+    const arxivRegex = /(\d{4}\.\d{4,5})(v\d+)?/g;
+    const matches = [...textStr.matchAll(arxivRegex)];
+    const uniqueIds = [...new Set(matches.map(m => m[1]))];
 
-  if (!uniqueIds.length) return;
+    if (!uniqueIds.length) return;
 
-  const container = el("div", "bottom-actions-container");
+    const container = el("div", "bottom-actions-container");
 
-  uniqueIds.forEach(arxivId => {
-    let displayTitle = `arXiv:${arxivId}`;
+    uniqueIds.forEach(arxivId => {
+      let displayTitle = `arXiv:${arxivId}`;
 
-    const lines = textStr.split('\n');
-    for (const line of lines) {
-      if (line.includes(arxivId)) {
-        const cleanLine = line.replace(/[\*\[\]#]/g, '').replace(/arXiv:?\s*\d{4}\.\d{4,5}(v\d+)?/gi, '').trim();
-        if (cleanLine.length > 5) {
-          displayTitle = cleanLine.slice(0, 45) + (cleanLine.length > 45 ? "…" : "") + ` (${arxivId})`;
-          break;
+      const lines = textStr.split('\n');
+      for (const line of lines) {
+        if (line && line.includes(arxivId)) {
+          const cleanLine = line.replace(/[\*\[\]#]/g, '').replace(/arXiv:?\s*\d{4}\.\d{4,5}(v\d+)?/gi, '').trim();
+          if (cleanLine.length > 3) {
+            displayTitle = cleanLine.slice(0, 45) + (cleanLine.length > 45 ? "…" : "") + ` (${arxivId})`;
+            break;
+          }
         }
       }
-    }
 
-    const row = el("div", "paper-actions-bar");
+      const row = el("div", "paper-actions-bar");
 
-    // Paper Title Label
-    const label = el("span", "paper-title-label", displayTitle);
+      // Paper Title Label
+      const label = el("span", "paper-title-label", displayTitle);
 
-    // PDF Button
-    const pdfBtn = el("a", "action-btn pdf-btn");
-    pdfBtn.href = `https://arxiv.org/pdf/${arxivId}.pdf`;
-    pdfBtn.target = "_blank";
-    pdfBtn.rel = "noopener noreferrer";
-    pdfBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">picture_as_pdf</span> PDF`;
+      // PDF Button
+      const pdfBtn = el("a", "action-btn pdf-btn");
+      pdfBtn.href = `https://arxiv.org/pdf/${arxivId}.pdf`;
+      pdfBtn.target = "_blank";
+      pdfBtn.rel = "noopener noreferrer";
+      pdfBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">picture_as_pdf</span> PDF`;
 
-    // BibTeX Button
-    const bibBtn = el("button", "action-btn bib-btn");
-    bibBtn.type = "button";
-    bibBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">content_copy</span> BibTeX`;
-    bibBtn.onclick = () => {
-      const cleanId = arxivId.replace(/[^a-zA-Z0-9]/g, '_');
-      const bibtex = `@article{arxiv_${cleanId},\n  title={${displayTitle.replace(/"/g, '\\"')}},\n  journal={arXiv preprint arXiv:${arxivId}},\n  year={2026}\n}`;
-      navigator.clipboard.writeText(bibtex).then(() => {
-        const orig = bibBtn.innerHTML;
-        bibBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">check</span> Copied!`;
-        bibBtn.classList.add("copied");
-        setTimeout(() => {
-          bibBtn.innerHTML = orig;
-          bibBtn.classList.remove("copied");
-        }, 2000);
-      });
-    };
+      // BibTeX Button
+      const bibBtn = el("button", "action-btn bib-btn");
+      bibBtn.type = "button";
+      bibBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">content_copy</span> BibTeX`;
+      bibBtn.onclick = () => {
+        const cleanId = arxivId.replace(/[^a-zA-Z0-9]/g, '_');
+        const cleanTitle = displayTitle.replace(/[\r\n"']/g, ' ');
+        const bibtex = `@article{arxiv_${cleanId},\n  title={${cleanTitle}},\n  journal={arXiv preprint arXiv:${arxivId}},\n  year={2026}\n}`;
+        navigator.clipboard.writeText(bibtex).then(() => {
+          const orig = bibBtn.innerHTML;
+          bibBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">check</span> Copied!`;
+          bibBtn.classList.add("copied");
+          setTimeout(() => {
+            bibBtn.innerHTML = orig;
+            bibBtn.classList.remove("copied");
+          }, 2000);
+        });
+      };
 
-    row.appendChild(label);
-    row.appendChild(pdfBtn);
-    row.appendChild(bibBtn);
+      row.appendChild(label);
+      row.appendChild(pdfBtn);
+      row.appendChild(bibBtn);
 
-    // GitHub Button
-    const ghMatch = textStr.match(/https?:\/\/github\.com\/[^\s\)`"'\>]+/i);
-    if (ghMatch) {
-      const ghBtn = el("a", "action-btn gh-btn");
-      ghBtn.href = ghMatch[0];
-      ghBtn.target = "_blank";
-      ghBtn.rel = "noopener noreferrer";
-      ghBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">code</span> Code`;
-      row.appendChild(ghBtn);
-    }
+      // GitHub Button
+      const ghMatch = textStr.match(/https?:\/\/github\.com\/[^\s\)`"'\>]+/i);
+      if (ghMatch) {
+        const ghBtn = el("a", "action-btn gh-btn");
+        ghBtn.href = ghMatch[0];
+        ghBtn.target = "_blank";
+        ghBtn.rel = "noopener noreferrer";
+        ghBtn.innerHTML = `<span class="material-symbols-outlined btn-icon">code</span> Code`;
+        row.appendChild(ghBtn);
+      }
 
-    container.appendChild(row);
-  });
+      container.appendChild(row);
+    });
 
-  b.appendChild(container);
+    b.appendChild(container);
+  } catch (err) {
+    console.error("attachPaperActionsAtBottom error:", err);
+  }
 }
+
 
 
 
